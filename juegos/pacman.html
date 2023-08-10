@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pacman Game</title>
+    <style>
+        body {
+            background-color: #0f0f3f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        canvas {
+            border: 2px solid #fff;
+        }
+        #gameInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameInfo">
+        <p>Score: <span id="score">0</span></p>
+        <p>Lives: <span id="lives">3</span></p>
+    </div>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const CELL_SIZE = 20;
+        const MAZE_ROWS = canvas.height / CELL_SIZE;
+        const MAZE_COLS = canvas.width / CELL_SIZE;
+
+        const pacmanColor = '#FFA500';
+        const ghostColors = ['#61A92D', '#A92D2D', '#2D4994', '#9F3D53', '#4B2E54'];
+
+        let pacmanX = 0;
+        let pacmanY = 0;
+        let ghostX = [];
+        let ghostY = [];
+        let ghostDirections = [];
+        let pacmanLives = 3;
+        let level = 1;
+        let points = 0;
+        let gameStarted = false;
+        let collisions = 0;
+
+        // Create the maze and points
+        const maze = [];
+        const pointsPositions = [];
+
+        for (let row = 0; row < MAZE_ROWS; row++) {
+            maze.push([]);
+            for (let col = 0; col < MAZE_COLS; col++) {
+                // Randomly decide if it's a wall (1) or an empty cell (0)
+                maze[row].push(Math.random() < 0.3 ? 1 : 0);
+
+                // Add points at empty cells
+                if (maze[row][col] === 0) {
+                    pointsPositions.push({ x: col, y: row });
+                }
+            }
+        }
+
+        // Initialize Pacman direction (1: right, 2: down, 3: left, 4: up)
+        let pacmanDirection = 1;
+        let pacmanMoving = false;
+
+        // Set Pacman's initial position in the center of the maze
+        pacmanX = (MAZE_COLS / 2) * CELL_SIZE;
+        pacmanY = (MAZE_ROWS / 2) * CELL_SIZE;
+
+        // Set ghost initial positions and directions
+        ghostX = [2 * CELL_SIZE, 2 * CELL_SIZE, 17 * CELL_SIZE, 17 * CELL_SIZE, 9 * CELL_SIZE];
+        ghostY = [2 * CELL_SIZE, 17 * CELL_SIZE, 2 * CELL_SIZE, 17 * CELL_SIZE, 9 * CELL_SIZE];
+        ghostDirections = [1, 2, 3, 4, 1];
+
+        // Helper function to handle key presses
+        function handleKeyPress(e) {
+            if (!gameStarted) {
+                gameStarted = true;
+                startGame();
+            }
+            // Handle Pacman movement
+            if (e.key === 'ArrowRight') pacmanDirection = 1;
+            else if (e.key === 'ArrowDown') pacmanDirection = 2;
+            else if (e.key === 'ArrowLeft') pacmanDirection = 3;
+            else if (e.key === 'ArrowUp') pacmanDirection = 4;
+            pacmanMoving = true;
+        }
+
+        // Helper function to handle key releases
+        function handleKeyRelease(e) {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                pacmanMoving = false;
+            }
+        }
+
+        // Add event listeners for key presses and releases
+        document.addEventListener('keydown', handleKeyPress);
+        document.addEventListener('keyup', handleKeyRelease);
+
+        function drawPacman(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, CELL_SIZE / 2, 0.2 * Math.PI, 1.8 * Math.PI);
+            ctx.lineTo(x, y);
+            ctx.fillStyle = pacmanColor;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawGhost(x, y, color) {
+            ctx.beginPath();
+            ctx.arc(x, y, CELL_SIZE / 2, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawMaze() {
+            ctx.fillStyle = '#0000FF'; // Blue color for walls
+            for (let row = 0; row < MAZE_ROWS; row++) {
+                for (let col = 0; col < MAZE_COLS; col++) {
+                    if (maze[row][col] === 1) {
+                        ctx.fillRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    }
+                }
+            }
+        }
+
+        function drawPoints() {
+            ctx.fillStyle = '#008000'; // Yellow color for points
+            pointsPositions.forEach((point) => {
+                ctx.beginPath();
+                ctx.arc(
+                    point.x * CELL_SIZE + CELL_SIZE / 2,
+                    point.y * CELL_SIZE + CELL_SIZE / 2,
+                    CELL_SIZE / 5,
+                    0,
+                    2 * Math.PI
+                );
+                ctx.fill();
+                ctx.closePath();
+            });
+        }
+
+        function drawLives() {
+            ctx.fillStyle = '#FFFFFF'; // White color for lives
+            ctx.font = '20px Arial';
+            ctx.fillText(`Lives: ${pacmanLives}`, 10, 20);
+        }
+
+        function drawScore() {
+            ctx.fillStyle = '#FFFFFF'; // White color for score
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${points}`, canvas.width - 100, 20);
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawMaze();
+            drawPoints();
+            drawPacman(pacmanX, pacmanY);
+            for (let i = 0; i < ghostX.length; i++) {
+                drawGhost(ghostX[i], ghostY[i], ghostColors[i]);
+            }
+            drawLives();
+            drawScore();
+        }
+
+        function checkCollision(x, y) {
+            // Check collision with walls and canvas boundaries
+            const nextX = x + Math.cos((pacmanDirection - 1) * (Math.PI / 2)) * (CELL_SIZE / 4);
+            const nextY = y + Math.sin((pacmanDirection - 1) * (Math.PI / 2)) * (CELL_SIZE / 4);
+
+            if (
+                nextX < 0 ||
+                nextY < 0 ||
+                nextX >= canvas.width ||
+                nextY >= canvas.height ||
+                maze[Math.floor(nextY / CELL_SIZE)][Math.floor(nextX / CELL_SIZE)] === 1
+            ) {
+                // Prevent moving into walls or outside the canvas
+                return true;
+            }
+
+            // Check collision with points
+            pointsPositions.forEach((point, index) => {
+                if (
+                    point.x === Math.floor(nextX / CELL_SIZE) &&
+                    point.y === Math.floor(nextY / CELL_SIZE)
+                ) {
+                    pointsPositions.splice(index, 1);
+                    points++;
+
+                    // Reset the fillStyle back to yellow for other points
+                    ctx.fillStyle = '#FFFF00';
+                }
+            });
+
+            // Check collision with ghosts
+            for (let i = 0; i < ghostX.length; i++) {
+                const dx = x - ghostX[i];
+                const dy = y - ghostY[i];
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < CELL_SIZE) {
+                    // Pacman collided with a ghost
+                    collisions++;
+                    pacmanLives--;
+
+                    if (pacmanLives <= 0) {
+                        // End the game if no lives left
+                        gameStarted = false;
+                        pacmanMoving = false;
+                        setTimeout(() => {
+                            showGameOver();
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }, 2000); // Clear the canvas after 2 seconds
+                    } else {
+                        // Reset Pacman's position to the center of the maze
+                        pacmanX = (MAZE_COLS / 2) * CELL_SIZE;
+                        pacmanY = (MAZE_ROWS / 2) * CELL_SIZE;
+                    }
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function moveGhost(ghostIndex) {
+            // Move the ghost in a random direction
+            const direction = ghostDirections[ghostIndex];
+            const nextX = ghostX[ghostIndex] + Math.cos((direction - 1) * (Math.PI / 2)) * (CELL_SIZE / 10);
+            const nextY = ghostY[ghostIndex] + Math.sin((direction - 1) * (Math.PI / 2)) * (CELL_SIZE / 10);
+
+            // Check collision with walls and other ghosts
+            if (
+                nextX >= 0 &&
+                nextY >= 0 &&
+                nextX < canvas.width &&
+                nextY < canvas.height &&
+                maze[Math.floor(nextY / CELL_SIZE)][Math.floor(nextX / CELL_SIZE)] !== 1 &&
+                !ghostsCollision(ghostIndex, nextX, nextY)
+            ) {
+                ghostX[ghostIndex] = nextX;
+                ghostY[ghostIndex] = nextY;
+            } else {
+                // Change direction if the ghost hits a wall or another ghost
+                const possibleDirections = [1, 2, 3, 4].filter((dir) => dir !== direction);
+                const newDirection = possibleDirections[Math.floor(Math.random() * possibleDirections.length)];
+                ghostDirections[ghostIndex] = newDirection;
+            }
+        }
+
+        function ghostsCollision(ghostIndex, x, y) {
+            for (let i = 0; i < ghostX.length; i++) {
+                if (i !== ghostIndex) {
+                    const dx = x - ghostX[i];
+                    const dy = y - ghostY[i];
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < CELL_SIZE) {
+                        // Ghost collided with another ghost, change direction
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function moveGhosts() {
+            for (let i = 0; i < ghostX.length; i++) {
+                moveGhost(i);
+            }
+        }
+
+        function update() {
+            if (!gameStarted) return;
+
+            // Update Pacman's position based on direction
+            if (pacmanMoving) {
+                const nextPacmanX = pacmanX + Math.cos((pacmanDirection - 1) * (Math.PI / 2)) * (CELL_SIZE / 4);
+                const nextPacmanY = pacmanY + Math.sin((pacmanDirection - 1) * (Math.PI / 2)) * (CELL_SIZE / 4);
+
+                if (!checkCollision(nextPacmanX, nextPacmanY)) {
+                    pacmanX = nextPacmanX;
+                    pacmanY = nextPacmanY;
+                }
+            }
+
+            moveGhosts();
+
+            drawGame();
+
+            // Check if all points have been collected
+            if (pointsPositions.length === 0) {
+                gameStarted = false;
+                pacmanMoving = false;
+                setTimeout(() => {
+                    showGameOver();
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }, 2000); // Clear the canvas after 2 seconds
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        function startGame() {
+            // Draw the initial game state
+            drawGame();
+
+            // Call the update() function using requestAnimationFrame
+            // This will call update() on every frame, providing smoother animation
+            requestAnimationFrame(update);
+        }
+
+        function showGameOver() {
+            const gameOverDiv = document.createElement('div');
+            gameOverDiv.style.position = 'absolute';
+            gameOverDiv.style.top = 0;
+            gameOverDiv.style.left = 0;
+            gameOverDiv.style.width = '100%';
+            gameOverDiv.style.height = '100%';
+            gameOverDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            gameOverDiv.style.display = 'flex';
+            gameOverDiv.style.justifyContent = 'center';
+            gameOverDiv.style.alignItems = 'center';
+
+            const gameOverText = document.createElement('p');
+            gameOverText.style.color = '#FF0000';
+            gameOverText.style.fontSize = '30px';
+            gameOverText.style.fontWeight = 'bold';
+            gameOverText.textContent = 'Game Over\n\nTotal Score: ' + points;
+
+            gameOverDiv.appendChild(gameOverText);
+            document.body.appendChild(gameOverDiv);
+        }
+    </script>
+</body>
+</html>
